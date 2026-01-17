@@ -48,7 +48,6 @@ jobs:
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'etc-proxy-fbf2hxekbvgjgtfv'
-          slot-name: 'Production'
+          app-name: 'etc-proxy'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_ETC_PROXY }}
           package: .
