@@ -1,6 +1,0 @@
-name = "etc-proxy-server"
-main = "worker.js"
-compatibility_date = "2026-01-17"
-
-[env.production]
-name = "etc-proxy-server"
