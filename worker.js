@@ -46,12 +46,12 @@ export default {
 
         // Prepare headers
         const headers = new Headers();
-        headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-        headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+        headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8');
         headers.set('Accept-Language', 'en-US,en;q=0.9');
-        headers.set('Connection', 'keep-alive');
-        headers.set('Referer', ETC_PORTAL);
-        headers.set('Origin', ETC_PORTAL);
+        headers.set('Accept-Encoding', 'gzip, deflate, br');
+        headers.set('Cache-Control', 'no-cache');
+        headers.set('Pragma', 'no-cache');
 
         // Copy content-type for POST requests
         if (request.method === 'POST') {
@@ -63,17 +63,21 @@ export default {
           }
         }
 
-        // Copy cookies
+        // Copy cookies from request
         const cookie = request.headers.get('cookie');
         if (cookie) {
           headers.set('Cookie', cookie);
         }
 
-        // Prepare request options
+        // Prepare request options with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+
         const options = {
           method: request.method,
           headers: headers,
           redirect: 'manual',
+          signal: controller.signal,
         };
 
         // Add body for POST requests
@@ -83,6 +87,7 @@ export default {
 
         // Make the request
         const response = await fetch(targetUrl, options);
+        clearTimeout(timeoutId);
 
         console.log(`[${new Date().toISOString()}] Response: ${response.status}`);
 
@@ -95,10 +100,17 @@ export default {
           responseHeaders.set('Content-Type', contentType);
         }
 
-        // Copy set-cookie headers
-        const setCookie = response.headers.get('set-cookie');
-        if (setCookie) {
-          responseHeaders.set('Set-Cookie', setCookie);
+        // Copy set-cookie headers (handle multiple)
+        const setCookieHeaders = response.headers.getSetCookie?.() || [];
+        if (setCookieHeaders.length > 0) {
+          setCookieHeaders.forEach(cookie => {
+            responseHeaders.append('Set-Cookie', cookie);
+          });
+        } else {
+          const setCookie = response.headers.get('set-cookie');
+          if (setCookie) {
+            responseHeaders.set('Set-Cookie', setCookie);
+          }
         }
 
         // Copy location for redirects
@@ -119,10 +131,26 @@ export default {
       } catch (error) {
         console.error(`[${new Date().toISOString()}] Error:`, error.message);
         
+        // Check if it's a timeout
+        if (error.name === 'AbortError') {
+          return new Response(JSON.stringify({
+            error: 'Timeout',
+            message: 'ETC portal took too long to respond. Please try again.',
+            timestamp: new Date().toISOString()
+          }), {
+            status: 504,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          });
+        }
+        
         return new Response(JSON.stringify({
           error: 'Proxy failed',
           message: error.message,
-          stack: error.stack
+          details: 'Unable to connect to ETC portal. The portal may be down or blocking requests.',
+          timestamp: new Date().toISOString()
         }), {
           status: 500,
           headers: {
